@@ -1,11 +1,18 @@
 <?php
 
 namespace App\Http\Controllers\api\v1;
-use App\Http\Controllers\Controller;
 
-use Mail;
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Http\Request;
+use App\Mail\TaskStatusUpdated;
+use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Notification;
+use App\Notifications\TaskAssignedNotification;
+use App\Notifications\TaskCompletedNotification;
+use Illuminate\Support\Facades\Log;
 
 class TaskController extends Controller
 {
@@ -122,6 +129,14 @@ class TaskController extends Controller
         'comments' => $validated['comments'] ?? null,
     ]);
 
+    /* Notify the assigned user */
+    if ($task->assigned_to) {
+        $assignedUser = User::find($task->assigned_to);
+        if ($assignedUser) {
+            $assignedUser->notify(new TaskAssignedNotification($task));
+        }
+    }
+
     return response()->json([
         'message' => 'Task created successfully',
         'task' => $task,
@@ -151,33 +166,66 @@ class TaskController extends Controller
     /**
      * Show the form for updating the specified resource.
      */
-    public function updateStatus(Request $request, Task $task)
+    public function updateStatus(Request $request, $taskId)
     {
+        // Get the authenticated user
+        $user = $request->user(); // Get the logged-in user
+
+        // Log the incoming request data
+        Log::info('Task status update attempt', [
+        'user_id' => $request->user()->id,
+        'task_id' => $taskId,
+        'status' => $request->input('status'),
+]);
+
+
+
         // Validate the request
         $request->validate([
-            'status' => 'required|string|in:pending,in-progress,completed'
+            'status' => 'required|string|in:pending,in-progress,completed',
+            'attachment' => 'nullable|file|mimes:jpg,jpeg,png,pdf,doc,docx|max:20480', // Optional attachment validation, max size 20MB
         ]);
 
+        // Fetch the task explicitly using the ID
+        $task = Task::find($taskId);
+
+        // Check if the task exists
+        if (!$task) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task not found.'
+            ], 404);
+        }
+        
         // Check if the authenticated user is assigned to this task
-        if ($task->assigned_to !== $request->user()->id) {
+        if ($task->assigned_to !== $user->id) {
             return response()->json([
                 'success' => false,
                 'message' => 'You are not authorized to update this task.'
+                 //'message' => 'User with ID ' . $user . ' is not authorized to update this task, rather it is assigned to user with ID ' . $task->assigned_to
             ], 403);
         }
 
+        // Handle the optional attachment
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $filePath = $file->store('attachments', 'public'); // Store the file in the 'attachments' directory
+
+            // Create an attachment record
+            $task->attachments()->create(['file_path' => $filePath]);
+        }
         // Update the status
         $task->update(['status' => $request->status]);
 
-         // Fetch admins' emails
-        $adminEmails = User::where('is_admin', true)->pluck('email')->toArray();
+         // Check if the task is completed
+        if ($request->status === 'completed') {
+        // Fetch all users with the role 'admin'
+        $admins = User::where('role', 'admin')->get();
 
-        // 🔔 Send mail to all admins
-     
-        foreach ($adminEmails as $email) {
-            Mail::to($email)->queue(new TaskStatusUpdated($task));
+            // Send an email notification to each admin
+            Notification::send($admins, new TaskCompletedNotification($task));
+           
         }
-
         return response()->json([
             'success' => true,
             'message' => 'Task status updated successfully.',

@@ -6,6 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class Task extends Model
 {
+    protected $fillable = [
+        'title',
+        'description',
+        'status',
+        'priority',
+        'assigned_to',
+        'created_by',
+        'due_date',
+        'comments',
+    ];
     
     public function assignedUser()
     {

@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Models\Task;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -9,37 +10,37 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class TaskStatusUpdated extends Mailable implements ShouldQueue
+class TaskAssigned extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public $task; // Make it accessible in the email view
+    public Task $task; // Make it accessible in the email view
 
     /**
      * Create a new message instance.
      */
-    public function __construct($task)
+    public function __construct(Task $task)
     {
         $this->task = $task;
     }
 
     /**
-     * Build the message.
+     * Get the message envelope.
      */
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Task Status Updated',
-        ); 
+            subject: 'You Have Been Assigned a New Task',
+        );
     }
 
     /**
-     * Define the content of the email.
+     * Get the message content definition.
      */
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.tasks.status-updated'
+            markdown: 'emails.tasks.assigned',
         );
     }
 
@@ -50,7 +51,6 @@ class TaskStatusUpdated extends Mailable implements ShouldQueue
      */
     public function attachments(): array
     {
-        // You can attach files here, if necessary
         return [];
     }
 }

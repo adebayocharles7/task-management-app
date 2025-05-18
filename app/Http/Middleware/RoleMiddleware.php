@@ -18,7 +18,7 @@ class RoleMiddleware
 
         $user = auth('api')->user(); // use the api guard
 
-        if ($user || !in_array($user->role, $roles)) {
+        if (!$user || !in_array($user->role, $roles)) {
             return response()->json([
                 'error' => 'Unauthorized!' 
             ], 403);
